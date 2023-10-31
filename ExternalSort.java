@@ -5,15 +5,11 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.PriorityQueue;
 
 public class ExternalSort {
-  private static final int BLOCK_SIZE = 2;
-
   public static void main(String[] args) throws IOException {
     BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in));
 
@@ -29,24 +25,33 @@ public class ExternalSort {
   public static void externalSort(String inputFile, String outputFile) throws IOException {
     List<String> tempFiles = new ArrayList<>();
 
-    BufferedReader reader = new BufferedReader(new FileReader(inputFile));
-    List<String> block = new ArrayList<>();
-    String line;
-    while ((line = reader.readLine()) != null) {
-      block.add(line);
-      if (block.size() >= BLOCK_SIZE) {
-        Collections.sort(block);
-        String tempFile = createTempFile(block);
-        tempFiles.add(tempFile);
-        block.clear();
-      }
-    }
+    long maxMemory = Runtime.getRuntime().maxMemory()/7;
 
-    if (!block.isEmpty()) {
-      Collections.sort(block);
-      String tempFile = createTempFile(block);
-      tempFiles.add(tempFile);
-      block.clear();
+    try (BufferedReader reader = new BufferedReader(new FileReader(inputFile))) {
+      List<String> lines = new ArrayList<>();
+      long currentMemory = 0;
+      String line;
+
+      while ((line = reader.readLine()) != null) {
+        long lineMemory = line.getBytes().length;
+
+        if (currentMemory + lineMemory > maxMemory) {
+          Collections.sort(lines);
+          tempFiles.add(createTempFile(lines));
+          lines.clear();
+          currentMemory = 0;
+        }
+
+        lines.add(line);
+        currentMemory += lineMemory;
+      }
+
+      if (!lines.isEmpty()) {
+        Collections.sort(lines);
+        tempFiles.add(createTempFile(lines));
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
     }
 
     mergeSortedFiles(tempFiles, outputFile);
@@ -54,25 +59,51 @@ public class ExternalSort {
 
   private static String createTempFile(List<String> block) throws IOException {
     File tempFile = File.createTempFile("temp", ".txt");
-    BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile));
-    for (String line : block) {
-      writer.write(line + "\n");
+    try (FileWriter writer = new FileWriter(tempFile)) {
+      for (String line : block) {
+        writer.write(line);
+        writer.write(System.lineSeparator());
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
     }
-    writer.close();
     tempFile.deleteOnExit();
     return tempFile.getAbsolutePath();
   }
 
-  private static void mergeSortedFiles(List<String> tempFiles, String outputFile) throws IOException {
-    PriorityQueue<String> pqs = new PriorityQueue<>();
-    BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile));
+  private static void mergeSortedFiles(List<String> fileNames, String outputFile) throws IOException {
+    List<BufferedReader> readers = new ArrayList<>();
+    List<String> lines = new ArrayList<>();
 
-    for (String file : tempFiles) {
-      pqs.addAll(Files.readAllLines(new File(file).toPath()));
+    for (String fileName : fileNames) {
+      readers.add(new BufferedReader(new FileReader(fileName)));
     }
 
-    while (!pqs.isEmpty()) {
-      writer.write(pqs.poll() + "\n");
+    for (BufferedReader reader : readers) {
+      String line = reader.readLine();
+      lines.add(line);
+    }
+
+    BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile));
+
+    while (!lines.isEmpty()) {
+      String minLine = Collections.min(lines);
+
+      writer.write(minLine);
+      writer.newLine();
+
+      int fileIndex = lines.indexOf(minLine);
+
+      BufferedReader reader = readers.get(fileIndex);
+      String newLine = reader.readLine();
+
+      if (newLine != null) {
+        lines.set(fileIndex, newLine);
+      } else {
+        readers.get(fileIndex).close();
+        readers.remove(fileIndex);
+        lines.remove(fileIndex);
+      }
     }
 
     writer.close();

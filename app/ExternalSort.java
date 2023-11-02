@@ -1,3 +1,5 @@
+package app;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -57,7 +59,7 @@ public class ExternalSort {
     mergeSortedFiles(tempFiles, outputFile);
   }
 
-  private static String createTempFile(List<String> block) throws IOException {
+  public static String createTempFile(List<String> block) throws IOException {
     File tempFile = File.createTempFile("temp", ".txt");
     try (FileWriter writer = new FileWriter(tempFile)) {
       for (String line : block) {
@@ -71,7 +73,7 @@ public class ExternalSort {
     return tempFile.getAbsolutePath();
   }
 
-  private static void mergeSortedFiles(List<String> fileNames, String outputFile) throws IOException {
+  public static void mergeSortedFiles(List<String> fileNames, String outputFile) throws IOException {
     List<BufferedReader> readers = new ArrayList<>();
     List<String> lines = new ArrayList<>();
 
